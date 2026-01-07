@@ -1,75 +1,98 @@
 // api/bypass.js
 const axios = require('axios');
 
-// Fungsi utama bypass (logic dari request kamu)
 async function bypassLogic(url) {
+    // Validasi URL sederhana
+    if (!url || !url.startsWith('http')) {
+        throw new Error('URL tidak valid. Pastikan menyertakan http:// atau https://');
+    }
+
     try {
-        if (!url) throw new Error('Url is required.');
-        
         // Step 1: Get Turnstile Token
-        const { data: cf } = await axios.post('https://api.nekolabs.web.id/tools/bypass/cf-turnstile', {
-            url: `https://bypass.city/bypass?bypass=${encodeURIComponent(url)}`,
-            siteKey: '0x4AAAAAAAGzw6rXeQWJ_y2P'
-        });
-        
-        if (!cf?.result) throw new Error('Failed to get cf token.');
-        
-        // Step 2: Bypass Request
-        const { data } = await axios.post('https://api2.bypass.city/bypass', {
-            url: url
-        }, {
-            headers: {
-                'accept': '*/*',
-                'accept-encoding': 'gzip, deflate, br',
-                'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-                'content-type': 'application/json',
-                'origin': 'https://bypass.city',
-                'referer': 'https://bypass.city/',
-                'sec-ch-ua': '"Chromium";v="137", "Not(A)Brand";v="24"',
-                'sec-ch-ua-mobile': '?1',
-                'sec-ch-ua-platform': '"Android"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-site',
-                'token': cf.result,
-                'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
-                'x-captcha-provider': 'TURNSTILE'
+        // Kita gunakan try-catch terpisah agar tau errornya di step mana
+        let cfToken;
+        try {
+            const cfResponse = await axios.post('https://api.nekolabs.web.id/tools/bypass/cf-turnstile', {
+                url: `https://bypass.city/bypass?bypass=${encodeURIComponent(url)}`,
+                siteKey: '0x4AAAAAAAGzw6rXeQWJ_y2P'
+            });
+            
+            if (!cfResponse.data || !cfResponse.data.result) {
+                throw new Error('Gagal mendapatkan token Turnstile (CF Token null).');
             }
-        });
-        
-        return data;
+            cfToken = cfResponse.data.result;
+        } catch (err) {
+            console.error("Error Step 1 (Token):", err.response?.data || err.message);
+            throw new Error('Gagal menghubungi server token. Coba lagi nanti.');
+        }
+
+        // Step 2: Bypass Request
+        try {
+            const bypassResponse = await axios.post('https://api2.bypass.city/bypass', {
+                url: url
+            }, {
+                headers: {
+                    'accept': '*/*',
+                    'content-type': 'application/json',
+                    'origin': 'https://bypass.city',
+                    'referer': 'https://bypass.city/',
+                    'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
+                    'token': cfToken,
+                    'x-captcha-provider': 'TURNSTILE'
+                }
+            });
+
+            return bypassResponse.data;
+        } catch (err) {
+            console.error("Error Step 2 (Bypass):", err.response?.data || err.message);
+            throw new Error(err.response?.data?.message || 'Gagal memproses bypass pada server tujuan.');
+        }
+
     } catch (error) {
-        console.error("Bypass Error:", error.message);
-        throw new Error(error.message || 'Internal Server Error');
+        throw error; // Lempar ke handler utama
     }
 }
 
-// Vercel Serverless Function Handler
+// Handler utama Vercel
 module.exports = async (req, res) => {
-    // Handle CORS
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
-
+    // Handle CORS (Pre-flight request)
     if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
+        return res.status(200).end();
     }
 
-    const { url } = req.body || req.query;
+    // Pastikan request method adalah POST
+    if (req.method !== 'POST') {
+        return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+    }
+
+    const { url } = req.body;
 
     if (!url) {
-        return res.status(400).json({ success: false, error: 'URL parameter is missing' });
+        return res.status(400).json({ success: false, message: 'URL parameter is missing' });
     }
 
     try {
         const result = await bypassLogic(url);
-        return res.status(200).json(result);
+        
+        // Cek apakah hasil bypass valid
+        if (result && (result.destination || result.success === true)) {
+            return res.status(200).json({
+                success: true,
+                destination: result.destination || result.url || result.result, // Handle variasi respon
+                original_response: result
+            });
+        } else {
+            return res.status(500).json({ 
+                success: false, 
+                message: result.message || 'Bypass gagal, tidak ada link tujuan ditemukan.' 
+            });
+        }
+
     } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
+        console.error("Server Error:", error.message);
+        return res.status(500).json({ 
+            success: false, 
+            message: error.message 
+        });
     }
 };
