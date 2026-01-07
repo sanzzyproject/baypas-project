@@ -42,27 +42,38 @@ document.addEventListener('DOMContentLoaded', () => {
         bypassBtn.disabled = true;
 
         try {
-            // Panggil API Vercel (Path relatif)
+            // Panggil API
             const response = await fetch('/api/bypass', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
             });
 
-            const data = await response.json();
+            // FIX: Baca sebagai text dulu untuk mencegah error JSON parsing
+            const textData = await response.text();
+            let data;
 
-            if (data.success && data.destination) {
+            try {
+                data = JSON.parse(textData);
+            } catch (e) {
+                // Jika gagal parse JSON, berarti server mengirim HTML error page
+                console.error("Server returned non-JSON:", textData);
+                throw new Error("Terjadi kesalahan server (500/404). Silakan coba lagi nanti.");
+            }
+
+            if (response.ok && data.success) {
                 // Sukses
-                finalLink.href = data.destination;
-                finalLink.textContent = data.destination;
+                const dest = data.destination;
+                finalLink.href = dest;
+                finalLink.textContent = dest;
                 resultArea.classList.remove('hidden');
             } else {
                 // Gagal dari logic bypass
                 throw new Error(data.message || 'Gagal memproses link.');
             }
         } catch (err) {
-            // Error network atau lainnya
-            errorMsg.textContent = err.message || 'Terjadi kesalahan server.';
+            console.error(err);
+            errorMsg.textContent = err.message || 'Terjadi kesalahan jaringan.';
             errorArea.classList.remove('hidden');
         } finally {
             loadingArea.classList.add('hidden');
@@ -74,8 +85,9 @@ document.addEventListener('DOMContentLoaded', () => {
     copyBtn.addEventListener('click', () => {
         const text = finalLink.href;
         navigator.clipboard.writeText(text).then(() => {
+            const originalText = copyBtn.textContent;
             copyBtn.textContent = 'Copied!';
-            setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+            setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
         });
     });
 });
