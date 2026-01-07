@@ -2,57 +2,48 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Link Bypass Tool SaaS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ViuStream</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <main class="container">
-        <header class="header">
-            <div class="badge">Free Bypass Tool</div>
-            <h1>Bypass Link Shorteners</h1>
-            <p>Lewati iklan yang mengganggu dengan satu klik. Cepat, aman, dan gratis.</p>
-        </header>
+    <header class="app-header">
+        <div class="logo">Viu<span class="green">Stream</span></div>
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="searchInput" placeholder="Cari film atau series...">
+        </div>
+    </header>
 
-        <section class="card">
-            <div class="input-group">
-                <input type="url" id="urlInput" placeholder="Tempel link di sini (contoh: https://linkvertise.com/...)" required>
-                <button id="bypassBtn">Bypass Sekarang</button>
-            </div>
-            
-            <div id="resultArea" class="result-area hidden">
-                <div class="success-box">
-                    <span class="label">Destination URL:</span>
-                    <a href="#" id="finalLink" target="_blank" rel="noopener noreferrer">...</a>
-                    <button id="copyBtn" class="copy-btn">Copy</button>
-                </div>
-            </div>
-
-            <div id="loadingArea" class="loading-area hidden">
-                <div class="spinner"></div>
-                <span>Sedang memproses...</span>
-            </div>
-
-            <div id="errorArea" class="error-area hidden">
-                <p id="errorMsg"></p>
-            </div>
-        </section>
-
-        <section class="supported-section">
-            <h2>Supported Websites</h2>
-            <div class="tags-container" id="supportedList">
-                </div>
-        </section>
-        
-        <footer class="footer">
-            <p>&copy; 2024 Bypass SaaS Tool. All rights reserved.</p>
-        </footer>
+    <main id="mainContent">
+        <div class="loading-spinner" id="mainLoader"></div>
     </main>
 
-    <script src="script.js"></script>
+    <div id="playerModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closePlayer()">&times;</span>
+            <div class="video-container">
+                <video id="videoPlayer" controls></video>
+            </div>
+            <div id="playerInfo" class="player-info"></div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="#" class="nav-item active" onclick="loadHome()">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="#" class="nav-item" onclick="focusSearch()">
+            <i class="fas fa-compass"></i>
+            <span>Cari</span>
+        </a>
+    </nav>
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="app.js"></script>
 </body>
 </html>
+
