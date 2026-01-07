@@ -1,39 +1,69 @@
 const mainContent = document.getElementById('mainContent');
 const searchInput = document.getElementById('searchInput');
 
-// --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     loadHome();
 
-    // Search Listener (Debounce)
     let timeout;
     searchInput.addEventListener('input', (e) => {
         clearTimeout(timeout);
         timeout = setTimeout(() => {
             if (e.target.value.length > 2) loadSearch(e.target.value);
             else if (e.target.value.length === 0) loadHome();
-        }, 600);
+        }, 800);
     });
 });
-
-// --- Functions ---
 
 function showLoading() {
     mainContent.innerHTML = '<div class="loading-spinner"></div>';
 }
 
+function stopLoading() {
+    // Helper untuk memastikan spinner hilang jika error
+    const spinner = document.querySelector('.loading-spinner');
+    if(spinner) spinner.remove();
+}
+
 async function loadHome() {
     showLoading();
     try {
+        // Ambil data dari API
         const res = await fetch('/api/home');
+        
+        if (!res.ok) throw new Error('Gagal terhubung ke server');
+        
         const data = await res.json();
         
-        // Viu home data structure varies, we assume standard lists
-        renderGrid(data.spotlight || [], "Spotlight");
-        // Combine other sections if available
+        if (data.error) throw new Error(data.message);
+
+        // Cek variasi struktur data Viu (karena dinamis)
+        // Kadang di 'spotlight', kadang di 'viuchannel_featured', dll
+        let items = [];
+        
+        if (data.spotlight) items = [...items, ...data.spotlight];
+        if (data.viuchannel_featured) items = [...items, ...data.viuchannel_featured];
+        if (data.new_release) items = [...items, ...data.new_release];
+
+        // Jika array kosong tapi tidak error, ambil sembarang array yg ada isinya
+        if (items.length === 0) {
+             Object.keys(data).forEach(key => {
+                 if (Array.isArray(data[key]) && data[key].length > 0) {
+                     items = [...items, ...data[key]];
+                 }
+             });
+        }
+
+        renderGrid(items, "Rekomendasi Untukmu");
+
     } catch (err) {
         console.error(err);
-        mainContent.innerHTML = '<p style="text-align:center; padding:20px;">Gagal memuat data.</p>';
+        mainContent.innerHTML = `
+            <div style="text-align:center; padding:40px; color:#aaa;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom:10px; color: #ff5555;"></i>
+                <p>Gagal memuat konten.</p>
+                <small>${err.message}</small><br>
+                <button onclick="loadHome()" style="margin-top:10px; padding:5px 15px; background:#333; color:white; border:none; border-radius:4px;">Coba Lagi</button>
+            </div>`;
     }
 }
 
@@ -42,33 +72,36 @@ async function loadSearch(query) {
     try {
         const res = await fetch(`/api/search?q=${query}`);
         const data = await res.json();
-        renderGrid(data, `Hasil pencarian: ${query}`);
+        if(data.error) throw new Error(data.message);
+        renderGrid(data, `Hasil: ${query}`);
     } catch (err) {
-        mainContent.innerHTML = '<p style="text-align:center;">Tidak ditemukan.</p>';
+        mainContent.innerHTML = '<p style="text-align:center; padding:20px;">Pencarian gagal atau tidak ditemukan.</p>';
     }
 }
 
 function renderGrid(items, title) {
     if (!items || items.length === 0) {
-        mainContent.innerHTML = '<p style="text-align:center; padding:20px;">Data kosong.</p>';
+        mainContent.innerHTML = '<p style="text-align:center; padding:20px;">Tidak ada konten ditemukan.</p>';
         return;
     }
 
+    // Filter item yang tidak punya gambar agar rapi
+    const validItems = items.filter(i => i.image_url || i.img_url);
+
     let html = `<h2 class="section-title">${title}</h2><div class="grid-container">`;
     
-    items.forEach(item => {
-        // Handle variations in API response keys
-        const img = item.image_url || item.img_url || 'https://via.placeholder.com/150x225?text=No+Img';
-        const title = item.title || item.name || 'Untitled';
+    validItems.forEach(item => {
+        const img = item.image_url || item.img_url;
+        const title = item.title || item.name || 'No Title';
         const id = item.product_id || item.id;
         
-        if(id) {
+        if(id && img) {
             html += `
             <div class="card" onclick="loadDetail('${id}')">
-                <img src="${img}" loading="lazy" alt="${title}">
+                <img src="${img}" loading="lazy" alt="${title}" onerror="this.src='https://via.placeholder.com/150x225?text=Viu'">
                 <div class="card-content">
                     <div class="card-title">${title}</div>
-                    <div class="card-sub">${item.synopsis ? item.synopsis.substring(0, 20)+'...' : 'Viu'}</div>
+                    <div class="card-sub">${item.synopsis ? item.synopsis.substring(0, 20)+'...' : 'Viu Original'}</div>
                 </div>
             </div>`;
         }
@@ -83,6 +116,9 @@ async function loadDetail(id) {
     try {
         const res = await fetch(`/api/detail?id=${id}`);
         const data = await res.json();
+        
+        if(data.error) throw new Error(data.message);
+
         const meta = data.metadata;
         const eps = data.product_list || [];
 
@@ -90,19 +126,18 @@ async function loadDetail(id) {
         <div class="detail-hero">
             <img src="${meta.cover_image_url || meta.image_url}" alt="cover">
             <div style="position:absolute; bottom:0; left:0; width:100%; background:linear-gradient(to top, #121212, transparent); padding:20px;">
-                <h1>${meta.title}</h1>
+                <h1 style="text-shadow: 2px 2px 4px black;">${meta.title}</h1>
             </div>
         </div>
         <div class="detail-info">
-            <p style="color:#ccc; font-size:0.9rem; margin-bottom:15px;">${meta.synopsis || 'Tidak ada sinopsis.'}</p>
+            <p style="color:#bbb; font-size:0.9rem; margin-bottom:15px; line-height:1.4;">${meta.synopsis || 'Sinopsis tidak tersedia.'}</p>
             <button class="btn-play" onclick="playVideo('${meta.product_id}', '${meta.ccs_product_id}')">
-                <i class="fas fa-play"></i> Putar Film/Eps 1
+                <i class="fas fa-play"></i> Putar Sekarang
             </button>
         </div>
-        <h3 class="section-title">Episode / Terkait</h3>
+        <h3 class="section-title">Episode / Related</h3>
         <div class="episodes-list">`;
 
-        // Render episodes if available
         if(eps.length > 0) {
             eps.forEach(ep => {
                 html += `
@@ -110,30 +145,28 @@ async function loadDetail(id) {
                     <img src="${ep.image_url}" class="ep-thumb">
                     <div>
                         <div style="color:white; font-size:0.9rem;">${ep.number ? 'Eps '+ep.number : ''} ${ep.title}</div>
-                        <div style="color:#777; font-size:0.7rem;">${ep.time_duration ? Math.floor(ep.time_duration/60)+' min' : ''}</div>
+                        <div style="color:#777; font-size:0.7rem;">${ep.time_duration ? Math.floor(ep.time_duration/60)+' min' : 'Movie'}</div>
                     </div>
                 </div>`;
             });
         } else {
-             // If movie, just show play button logic above
-             html += `<p style="padding:15px; color:#666;">Ini adalah film (Single Video).</p>`;
+             html += `<p style="padding:15px; color:#666;">Film Single (Langsung tekan putar).</p>`;
         }
-
-        html += `</div>`; // Close list
+        html += `</div>`;
         mainContent.innerHTML = html;
         window.scrollTo(0,0);
-
     } catch (err) {
-        console.error(err);
+        mainContent.innerHTML = `<p style="text-align:center; padding:20px;">Gagal memuat detail. <br> ${err.message}</p>`;
     }
 }
 
+// ... (Bagian Player di bawah tetap sama dengan sebelumnya)
 async function playVideo(productId, ccsId) {
     if(!ccsId) { alert("Video ID tidak ditemukan"); return; }
     
-    // UI Loading
     const btn = document.querySelector('.btn-play');
-    if(btn) btn.innerText = 'Memuat...';
+    const oriText = btn ? btn.innerHTML : '';
+    if(btn) btn.innerText = 'Memuat Link...';
 
     try {
         const res = await fetch(`/api/stream?id=${ccsId}`);
@@ -142,34 +175,28 @@ async function playVideo(productId, ccsId) {
         if(data && data.url) {
             openPlayer(data.url);
         } else {
-            alert('Gagal mendapatkan link stream.');
+            alert('Gagal: Link stream tidak ditemukan (Mungkin Premium/VIP).');
         }
     } catch(err) {
-        alert('Error saat load stream.');
+        alert('Error network saat load stream.');
     }
     
-    if(btn) btn.innerHTML = '<i class="fas fa-play"></i> Putar';
+    if(btn) btn.innerHTML = oriText;
 }
 
-// --- Player Logic ---
 const modal = document.getElementById('playerModal');
 const video = document.getElementById('videoPlayer');
 
 function openPlayer(url) {
     modal.style.display = 'block';
-    
     if (Hls.isSupported()) {
         const hls = new Hls();
         hls.loadSource(url);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, function() {
-            video.play();
-        });
+        hls.on(Hls.Events.MANIFEST_PARSED, function() { video.play(); });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = url;
-        video.addEventListener('loadedmetadata', function() {
-            video.play();
-        });
+        video.addEventListener('loadedmetadata', function() { video.play(); });
     }
 }
 
