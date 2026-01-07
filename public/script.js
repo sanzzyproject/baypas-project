@@ -1,41 +1,13 @@
-const supportedSites = [
-    "Linkvertise", "Sub2Get", "Lootlinks", "AdFoc.us", "Boost.ink", 
-    "BoostFusedGT", "leasurepartment.xyz", "LetsBoost", "mboost.me", 
-    "Rekonise", "shorte.st", "Sub2Unlock.com", "Sub2Unlock.net", "v.gd", 
-    "dragonslayer", "tinyurl.com", "bit.ly", "is.gd", "rebrand.ly", 
-    "empebau.eu", "socialwolvez.com", "sub1s.com", "tinylink.onl", 
-    "google-url", "Justpaste.it Redirect", "SubFinal", "Location Redirect", 
-    "Ad-Maven", "BaseResolver", "ParamsResolver"
-];
-
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Render Supported Sites List
-    const listContainer = document.getElementById('supportedList');
-    supportedSites.forEach(site => {
-        const span = document.createElement('span');
-        span.className = 'tag';
-        span.textContent = site;
-        listContainer.appendChild(span);
-    });
-
-    // 2. Handle Bypass
-    const urlInput = document.getElementById('urlInput');
-    const bypassBtn = document.getElementById('bypassBtn');
-    const resultArea = document.getElementById('resultArea');
-    const loadingArea = document.getElementById('loadingArea');
-    const errorArea = document.getElementById('errorArea');
-    const finalLink = document.getElementById('finalLink');
-    const errorMsg = document.getElementById('errorMsg');
-    const copyBtn = document.getElementById('copyBtn');
+// public/script.js
+// ... (Bagian supportedSites sama seperti sebelumnya) ...
 
     bypassBtn.addEventListener('click', async () => {
         const url = urlInput.value.trim();
         if (!url) {
-            alert('Mohon masukkan URL terlebih dahulu.');
+            alert('Mohon masukkan URL.');
             return;
         }
 
-        // Reset UI
         resultArea.classList.add('hidden');
         errorArea.classList.add('hidden');
         loadingArea.classList.remove('hidden');
@@ -49,45 +21,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ url })
             });
 
-            // FIX: Baca sebagai text dulu untuk mencegah error JSON parsing
-            const textData = await response.text();
-            let data;
+            const rawText = await response.text(); // Baca sebagai text mentah dulu
 
+            let data;
             try {
-                data = JSON.parse(textData);
+                data = JSON.parse(rawText); // Coba ubah ke JSON
             } catch (e) {
-                // Jika gagal parse JSON, berarti server mengirim HTML error page
-                console.error("Server returned non-JSON:", textData);
-                throw new Error("Terjadi kesalahan server (500/404). Silakan coba lagi nanti.");
+                // Jika gagal JSON parse, berarti Vercel mengirim HTML Error Page
+                console.error("Vercel HTML Error:", rawText);
+                throw new Error(`Server Error (${response.status}): Endpoint tidak ditemukan atau crash.`);
             }
 
             if (response.ok && data.success) {
-                // Sukses
-                const dest = data.destination;
-                finalLink.href = dest;
-                finalLink.textContent = dest;
+                finalLink.href = data.destination;
+                finalLink.textContent = data.destination;
                 resultArea.classList.remove('hidden');
             } else {
-                // Gagal dari logic bypass
                 throw new Error(data.message || 'Gagal memproses link.');
             }
+
         } catch (err) {
             console.error(err);
-            errorMsg.textContent = err.message || 'Terjadi kesalahan jaringan.';
+            errorMsg.textContent = err.message;
             errorArea.classList.remove('hidden');
         } finally {
             loadingArea.classList.add('hidden');
             bypassBtn.disabled = false;
         }
     });
-
-    // Copy Button Logic
-    copyBtn.addEventListener('click', () => {
-        const text = finalLink.href;
-        navigator.clipboard.writeText(text).then(() => {
-            const originalText = copyBtn.textContent;
-            copyBtn.textContent = 'Copied!';
-            setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
-        });
-    });
-});
+// ... (Sisa kode sama)
